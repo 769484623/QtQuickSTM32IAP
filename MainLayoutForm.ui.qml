@@ -64,7 +64,7 @@ Item {
     }
     ComboBox {
         id: packetLengthCombo
-        model: ["255", "128", "64", "32", "16"]
+        model: ["128", "64", "32", "16"]
         width: 160
         height: 32
         anchors.left: firmwareChooseButton.left
