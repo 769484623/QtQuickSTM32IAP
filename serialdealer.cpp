@@ -136,6 +136,7 @@ bool SerialDealer::firmwareDownload()
     if(ReadFirmwareFile())
     {
         if(!SerialPortSet())return false;
+        uint8_t RepeatSending = 0;
         for(int32_t i = 0;i < FirmwareBufferSilces.count();i++)
         {
             uint8_t BufferHeader[4] = {0}, CommandIndex = 0;
@@ -160,8 +161,8 @@ bool SerialDealer::firmwareDownload()
                             break;
                         default:
                         {
-                            SerialPort.close();
-                            return false;
+                            if(RepeatSending < 5){i--;break;}// Re-Sending
+                            else{SerialPort.close();return false;}
                             break;
                         }
                         }
@@ -196,7 +197,6 @@ QVariantList SerialDealer::portListRead()
     }
     return PortList;
 }
-
 QString SerialDealer::readFirmwareDir()
 {
     return this->FirmwareDir;
