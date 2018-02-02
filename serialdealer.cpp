@@ -1,4 +1,5 @@
 #include "serialdealer.h"
+#include <QtEndian>
 #include <iostream>
 #include <fstream>
 
@@ -44,7 +45,7 @@ SerialDealer::~SerialDealer()
         SerialPort.flush();
         SerialPort.close();
     }
-    firmwareBufferSilcesClean();
+    BufferSilcesClean();
 }
 bool SerialDealer::SerialPortSet()
 {
@@ -61,48 +62,13 @@ bool SerialDealer::SerialPortSet()
     SerialPort.setReadBufferSize(1024);
     return true;
 }
-bool SerialDealer::SendSliceBuffer(int Index)
-{
-    uint8_t Header[3] = {0};
-    uint8_t HeaderLength = 0;
-    if(Index < FirmwareBufferSilces.count())
-    {
-        FirmwareBuffer* pBuffer = FirmwareBufferSilces[Index];
-        if(pBuffer->GetBuferLength() > SilceSize)
-        {
-            std::cout<<"BufferLength is Bigger than SilceSize"<<std::endl;
-            return false;
-        }
-        Header[HeaderLength++] = pBuffer->GetBuferLength();
-
-        if(this->UseSeqNum)//Use sequence number
-        {
-            if(this->SeqNum > 255)
-            {
-                std::cout<<"SeqNum is Bigger than 255"<<std::endl;
-                return false;
-            }
-            Header[HeaderLength++] = this->SeqNum;
-            this->SeqNum ++;
-        }
-        if(this->UseCRC8)// Use CRC8
-        {
-            Header[HeaderLength++] = pBuffer->GetCRC();
-        }
-        SerialPort.write((const char*)Header,HeaderLength);
-        SerialPort.write((const char*)pBuffer->GetBufferContent(),pBuffer->GetBuferLength());
-        SerialPort.flush();
-        return SerialPort.waitForBytesWritten(1000);
-    }
-    return false;
-}
 bool SerialDealer::ReadFirmwareFile()
 {
     std::ifstream inFile;
     inFile.open(FirmwareDir.toStdString(),std::ios::in|std::ios::binary);
     if(inFile)
     {
-        firmwareBufferSilcesClean();
+        BufferSilcesClean();
 
         inFile.seekg(0,std::ios::end);
         uint64_t FileLength = inFile.tellg();
@@ -133,78 +99,97 @@ bool SerialDealer::ReadFirmwareFile()
     }
     return false;
 }
-void SerialDealer::firmwareBufferSilcesClean()
+void SerialDealer::BufferSilcesClean()
 {
     foreach (FirmwareBuffer* pBuffer, FirmwareBufferSilces) {
         delete pBuffer;
     }
     FirmwareBufferSilces.clear();
 }
+inline uint8_t SerialDealer::SerialPortReadByte()
+{
+    SerialPort.clear();
+    if(SerialPort.waitForReadyRead(5000))
+    {
+        QByteArray bufferRead = SerialPort.readAll();
+        if(bufferRead.count() == 1)
+        {
+            return bufferRead[0];
+        }
+        std::cout<<"Unexpect Respond."<<std::endl;
+    }
+    else
+    {
+        std::cout<<"Timeout."<<std::endl;
+    }
+    SerialPort.close();
+    return 0;
+}
+inline bool SerialDealer::SerialPortWrite(const uint8_t *Buffer, uint32_t Length)
+{
+    SerialPort.write((const char*)Buffer,Length);
+    SerialPort.flush();
+    return SerialPort.waitForBytesWritten(1000);
+}
 bool SerialDealer::firmwareDownload()
 {
     if(ReadFirmwareFile())
     {
         if(!SerialPortSet())return false;
-
-        if(UseSeqNum)
-            this->SeqNum = 0;
-
+        this->SeqNum = 0;
         for(int32_t i = 0;i < FirmwareBufferSilces.count();i++)
         {
-            if(SendSliceBuffer(i))
+            uint8_t BufferHeader[5] = {0}, CommandIndex = 0;
+            FirmwareBuffer* pBuffer = FirmwareBufferSilces[i];
+            BufferHeader[CommandIndex++] = DOWNLOAD_FIRMWARE;
+            if(UseSeqNum)
             {
-                SerialPort.clear();
-                if(SerialPort.waitForReadyRead(5000))
+                qToLittleEndian((uint16_t)SeqNum,BufferHeader + CommandIndex);
+                CommandIndex +=2;
+            }
+            BufferHeader[CommandIndex++] = pBuffer->GetBuferLength();
+            if(pBuffer->GetBuferLength() > SilceSize){std::cout<<"BufferLength is Bigger than SilceSize"<<std::endl;return false;}
+            if(UseCRC8){BufferHeader[CommandIndex++] = pBuffer->GetCRC();}
+
+            if(SerialPortWrite(BufferHeader,5))
+            {
+                uint8_t USART_Ret = SerialPortReadByte();
+                switch (USART_Ret) {
+                case 0x3C:
                 {
-                    QByteArray bufferRead = SerialPort.readAll();
-                    if(bufferRead.count() != 1)
+                    if(SerialPortWrite(pBuffer->GetBufferContent(),pBuffer->GetBuferLength()))
                     {
-                        std::cout<<"Unexpect Respond."<<std::endl;
-                        SerialPort.close();
-                        return false;
-                    }
-                    switch (bufferRead[0])
-                    {
-                    case 0x3C://ACK
-                        break;
-                    case 0x0F://CRC Error
-                    default:
-                    {
-                        uint8_t Timeout = 0;
-                        for(; Timeout < 5 && (!SendSliceBuffer(i));Timeout++);
-                        if(Timeout == 5)
+                        USART_Ret = SerialPortReadByte();
+                        switch (USART_Ret)
                         {
-                            std::cout<<"Please Check the cable."<<std::endl;
+                        case 0x3C://ACK
+                            break;
+                        default:
+                        {
                             SerialPort.close();
                             return false;
+                            break;
                         }
-                        break;
+                        }
+                        continue;
                     }
-                    }
+                    break;
                 }
-                else
-                {
-                    SerialPort.close();
-                    return false;
+                default:
+                    break;
                 }
+
             }
-            else
-            {
-                SerialPort.close();
-                return false;
-            }
+            SerialPort.close();
+            return false;
         }
-        uint8_t EndOfFirmware = 0x00;
-        SerialPort.write((char*)&EndOfFirmware,1);
-        SerialPort.flush();
+        uint8_t EndOfFirmware = 0xFF;
+        SerialPortWrite(&EndOfFirmware,1);
         SerialPort.close();
+        return true;
     }
-    else
-    {
-        std::cout<<"Read Firmware Failed!"<<std::endl;
-        return false;
-    }
-    return true;
+    std::cout<<"Read Firmware Failed!"<<std::endl;
+    return false;
 }
 QVariantList SerialDealer::portListRead()
 {

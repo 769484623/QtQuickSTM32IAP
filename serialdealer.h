@@ -34,6 +34,7 @@ private:
 
         uint8_t CRC_CalcBlockCRC8Bit(uint8_t *data, uint32_t BufferLength);
     };
+    enum CommandType{DOWNLOAD_FIRMWARE = 0};
 
     bool UseSeqNum = true;
     bool UseCRC8 = true;
@@ -43,11 +44,13 @@ private:
 
     QVector<FirmwareBuffer*> FirmwareBufferSilces;
     QSerialPort SerialPort;
-
-    bool ReadFirmwareFile();//Read, then slice it to SilceSize pieces.
-    void firmwareBufferSilcesClean();
-    bool SendSliceBuffer(int Index = 0);
     bool SerialPortSet();
+    bool ReadFirmwareFile();//Read, then slice it to SilceSize pieces.
+
+    void BufferSilcesClean();
+
+    inline bool SerialPortWrite(const uint8_t *Buffer, uint32_t Length);
+    inline uint8_t SerialPortReadByte();
 public:
     Q_INVOKABLE bool firmwareDownload();
     Q_INVOKABLE QVariantList portListRead();
