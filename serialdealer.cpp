@@ -109,7 +109,7 @@ void SerialDealer::BufferSilcesClean()
 inline uint8_t SerialDealer::SerialPortReadByte()
 {
     SerialPort.clear();
-    if(SerialPort.waitForReadyRead(5000))
+    if(SerialPort.waitForReadyRead(1000))
     {
         QByteArray bufferRead = SerialPort.readAll();
         if(bufferRead.count() == 1)
@@ -120,7 +120,7 @@ inline uint8_t SerialDealer::SerialPortReadByte()
     }
     else
     {
-        std::cout<<"Timeout."<<std::endl;
+        std::cout<<"Do not get respond from device."<<std::endl;
     }
     SerialPort.close();
     return 0;
@@ -136,22 +136,16 @@ bool SerialDealer::firmwareDownload()
     if(ReadFirmwareFile())
     {
         if(!SerialPortSet())return false;
-        this->SeqNum = 0;
         for(int32_t i = 0;i < FirmwareBufferSilces.count();i++)
         {
-            uint8_t BufferHeader[5] = {0}, CommandIndex = 0;
+            uint8_t BufferHeader[4] = {0}, CommandIndex = 0;
             FirmwareBuffer* pBuffer = FirmwareBufferSilces[i];
             BufferHeader[CommandIndex++] = DOWNLOAD_FIRMWARE;
-            if(UseSeqNum)
-            {
-                qToLittleEndian((uint16_t)SeqNum,BufferHeader + CommandIndex);
-                CommandIndex +=2;
-            }
-            BufferHeader[CommandIndex++] = pBuffer->GetBuferLength();
             if(pBuffer->GetBuferLength() > SilceSize){std::cout<<"BufferLength is Bigger than SilceSize"<<std::endl;return false;}
+            qToLittleEndian((uint16_t)pBuffer->GetBuferLength(),BufferHeader + CommandIndex);
+            CommandIndex +=2;
             if(UseCRC8){BufferHeader[CommandIndex++] = pBuffer->GetCRC();}
-
-            if(SerialPortWrite(BufferHeader,5))
+            if(SerialPortWrite(BufferHeader,4))
             {
                 uint8_t USART_Ret = SerialPortReadByte();
                 switch (USART_Ret) {
@@ -225,18 +219,7 @@ unsigned int SerialDealer::readSliceSize()
 }
 void SerialDealer::setSliceSize(unsigned int sliceSize)//Need to be improved
 {
-    if(sliceSize > 255)
-        this->SilceSize = 255;
-    else
-        this->SilceSize = sliceSize;
-}
-bool SerialDealer::readUseSeqNum()
-{
-    return this->UseSeqNum;
-}
-void SerialDealer::setUseSeqNum(bool useSeqNum)
-{
-    this->UseSeqNum = useSeqNum;
+    this->SilceSize = sliceSize;
 }
 bool SerialDealer::readUseCRC8()
 {

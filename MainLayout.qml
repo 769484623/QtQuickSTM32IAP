@@ -43,7 +43,6 @@ MainLayoutForm {
         }
         else
         {
-            portDealer.useSeqNum = sequentialNumberCheckBox.checked
             portDealer.useCRC8 = crc8CheckCheckBox.checked
             portDealer.firmwareDir = firmwareDirectory
             portDealer.portName = serialPortCombo.currentText;

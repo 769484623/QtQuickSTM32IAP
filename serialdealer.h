@@ -15,7 +15,6 @@ class SerialDealer : public QObject
     Q_PROPERTY(QString portName READ readPortName WRITE setPortName)
     Q_PROPERTY(QString firmwareDir READ readFirmwareDir WRITE setFirmwareDir)
     Q_PROPERTY(unsigned int sliceSize READ readSliceSize WRITE setSliceSize)
-    Q_PROPERTY(bool useSeqNum READ readUseSeqNum WRITE setUseSeqNum)
     Q_PROPERTY(bool useCRC8 READ readUseCRC8 WRITE setUseCRC8)
 
 private:
@@ -36,9 +35,7 @@ private:
     };
     enum CommandType{DOWNLOAD_FIRMWARE = 0};
 
-    bool UseSeqNum = true;
     bool UseCRC8 = true;
-    uint32_t SeqNum = 0;
     uint32_t SilceSize = 0;
     QString FirmwareDir = "";
 
@@ -66,9 +63,6 @@ public:
 
     unsigned int readSliceSize();
     void setSliceSize(unsigned int sliceSize);
-
-    bool readUseSeqNum();
-    void setUseSeqNum(bool useSeqNum);
 
     bool readUseCRC8();
     void setUseCRC8(bool useCRC8);

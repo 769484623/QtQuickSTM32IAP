@@ -64,7 +64,7 @@ Item {
     }
     ComboBox {
         id: packetLengthCombo
-        model: ["128", "64", "32", "16"]
+        model: ["1024", "512", "256", "128", "64", "32", "16"]
         width: 160
         height: 32
         anchors.left: firmwareChooseButton.left
@@ -88,8 +88,9 @@ Item {
         id: sequentialNumberCheckBox
         width: 160
         height: 32
-        text: qsTr("使用分片序列号")
-        checked: true
+        text: qsTr("未来拓展")
+        enabled: false
+        checked: false
         anchors.left: downloadButton.left
         anchors.leftMargin: 0
         anchors.bottom: downloadButton.top
